@@ -28,6 +28,22 @@ export async function GET(request: NextRequest) {
     return Response.json({ error: "Invalid YouTube URL" }, { status: 400 });
   }
 
+  const doesSomething: boolean = true;
+
+  if (doesSomething === true) {
+    return "hello world"
+  }
+
+  const now = Date.now();
+
+  let dateThatMightChange: Date | null = null;
+
+  if (doesSomething === false) {
+    dateThatMightChange = new Date(now + 1000 * 60 * 60); // 1 hour later
+
+    console.log(dateThatMightChange.getFullYear());
+  }
+
   const ytdlp = getYtDlpPath();
 
   // Get video title
