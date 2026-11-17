@@ -37,7 +37,6 @@ RUN addgroup --system --gid 1001 nodejs && \
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules ./node_modules
 COPY --from=builder --chown=nextjs:nodejs /app/.next ./.next
 COPY --from=builder --chown=nextjs:nodejs /app/public ./public
-COPY --from=builder --chown=nextjs:nodejs /app/server.ts ./server.ts
 COPY --from=builder --chown=nextjs:nodejs /app/src/app/lib ./src/app/lib
 COPY --from=builder --chown=nextjs:nodejs /app/next.config.ts ./next.config.ts
 COPY --from=builder --chown=nextjs:nodejs /app/tsconfig.json ./tsconfig.json
@@ -51,4 +50,4 @@ EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
 
-CMD ["sh", "-c", "node node_modules/prisma/build/index.js migrate deploy && npx tsx server.ts"]
+CMD ["sh", "-c", "node node_modules/prisma/build/index.js migrate deploy && node node_modules/next/dist/bin/next start"]

@@ -1,23 +1,20 @@
 import { type NextRequest } from "next/server";
 import { prisma } from "@/app/lib/prisma";
-import { getSession } from "@/app/lib/session";
+import { getWorkspace } from "@/app/lib/workspace";
 
 type Ctx = { params: Promise<{ videoId: string }> };
 
 export async function GET(_req: NextRequest, { params }: Ctx) {
-  const session = await getSession();
-  if (!session?.userId) {
-    return Response.json({ error: "Authentication required" }, { status: 401 });
-  }
+  const workspace = await getWorkspace();
 
   const { videoId } = await params;
 
   const [favorite, note] = await Promise.all([
     prisma.favorite.findUnique({
-      where: { userId_videoId: { userId: session.userId, videoId } },
+      where: { userId_videoId: { userId: workspace.id, videoId } },
     }),
     prisma.note.findUnique({
-      where: { userId_videoId: { userId: session.userId, videoId } },
+      where: { userId_videoId: { userId: workspace.id, videoId } },
     }),
   ]);
 
@@ -30,10 +27,7 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
 }
 
 export async function PUT(request: NextRequest, { params }: Ctx) {
-  const session = await getSession();
-  if (!session?.userId) {
-    return Response.json({ error: "Authentication required" }, { status: 401 });
-  }
+  const workspace = await getWorkspace();
 
   const { videoId } = await params;
   const {
@@ -44,9 +38,9 @@ export async function PUT(request: NextRequest, { params }: Ctx) {
   } = await request.json();
 
   const note = await prisma.note.upsert({
-    where: { userId_videoId: { userId: session.userId, videoId } },
+    where: { userId_videoId: { userId: workspace.id, videoId } },
     create: {
-      userId: session.userId,
+      userId: workspace.id,
       videoId,
       blocks,
       timecodes: timecodes ?? [],

@@ -1,6 +1,6 @@
 import { type NextRequest } from "next/server";
 import { execFileAsync, getYtDlpPath, analyzeBeatInfo } from "@/app/lib/ytdlp";
-import { getSession } from "@/app/lib/session";
+import { getWorkspace } from "@/app/lib/workspace";
 import { prisma } from "@/app/lib/prisma";
 import {
   YT_API_BASE,
@@ -81,13 +81,10 @@ function persistToCache(results: {
 // ── Main handler ────────────────────────────────────────────────
 
 export async function GET(request: NextRequest) {
-  const session = await getSession();
-  if (!session?.userId) {
-    return Response.json({ error: "Authentication required" }, { status: 401 });
-  }
+  const workspace = await getWorkspace();
 
   const dbUser = await prisma.user.findUnique({
-    where: { id: session.userId },
+    where: { id: workspace.id },
     select: { youtubeApiKey: true },
   });
 

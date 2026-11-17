@@ -1,15 +1,12 @@
 import { prisma } from "@/app/lib/prisma";
-import { getSession } from "@/app/lib/session";
+import { getWorkspace } from "@/app/lib/workspace";
 
 export async function GET() {
-  const session = await getSession();
-  if (!session?.userId) {
-    return Response.json({ error: "Authentication required" }, { status: 401 });
-  }
+  const workspace = await getWorkspace();
 
   const notes = await prisma.note.findMany({
     where: {
-      userId: session.userId,
+      userId: workspace.id,
       songName: { not: null },
     },
     orderBy: { updatedAt: "desc" },
@@ -33,10 +30,7 @@ export async function GET() {
 
 // PATCH /api/songs — move a song to a folder (or null to remove from folder)
 export async function PATCH(req: Request) {
-  const session = await getSession();
-  if (!session?.userId) {
-    return Response.json({ error: "Authentication required" }, { status: 401 });
-  }
+  const workspace = await getWorkspace();
 
   const body = await req.json();
   const { videoId, folder } = body as { videoId: string; folder: string | null };
@@ -49,7 +43,7 @@ export async function PATCH(req: Request) {
   }
 
   await prisma.note.updateMany({
-    where: { userId: session.userId, videoId },
+    where: { userId: workspace.id, videoId },
     data: { folder: folder?.trim() || null },
   });
 

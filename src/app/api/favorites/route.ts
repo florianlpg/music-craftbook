@@ -1,15 +1,12 @@
 import { type NextRequest } from "next/server";
 import { prisma } from "@/app/lib/prisma";
-import { getSession } from "@/app/lib/session";
+import { getWorkspace } from "@/app/lib/workspace";
 
 export async function GET() {
-  const session = await getSession();
-  if (!session?.userId) {
-    return Response.json({ error: "Authentication required" }, { status: 401 });
-  }
+  const workspace = await getWorkspace();
 
   const favorites = await prisma.favorite.findMany({
-    where: { userId: session.userId },
+    where: { userId: workspace.id },
     orderBy: { createdAt: "desc" },
   });
 
@@ -17,10 +14,7 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const session = await getSession();
-  if (!session?.userId) {
-    return Response.json({ error: "Authentication required" }, { status: 401 });
-  }
+  const workspace = await getWorkspace();
 
   const body = await request.json();
   const {
@@ -34,9 +28,9 @@ export async function POST(request: NextRequest) {
   }
 
   const favorite = await prisma.favorite.upsert({
-    where: { userId_videoId: { userId: session.userId, videoId } },
+    where: { userId_videoId: { userId: workspace.id, videoId } },
     create: {
-      userId: session.userId,
+      userId: workspace.id,
       videoId,
       title,
       thumbnail: thumbnail ?? "",
@@ -60,10 +54,7 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PATCH(request: NextRequest) {
-  const session = await getSession();
-  if (!session?.userId) {
-    return Response.json({ error: "Authentication required" }, { status: 401 });
-  }
+  const workspace = await getWorkspace();
 
   const { videoId, bpm, key, beatType, inspiredBy, tags } = await request.json();
   if (!videoId) {
@@ -71,7 +62,7 @@ export async function PATCH(request: NextRequest) {
   }
 
   const favorite = await prisma.favorite.update({
-    where: { userId_videoId: { userId: session.userId, videoId } },
+    where: { userId_videoId: { userId: workspace.id, videoId } },
     data: {
       bpm: bpm ?? null,
       key: key ?? null,
@@ -85,10 +76,7 @@ export async function PATCH(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
-  const session = await getSession();
-  if (!session?.userId) {
-    return Response.json({ error: "Authentication required" }, { status: 401 });
-  }
+  const workspace = await getWorkspace();
 
   const videoId = request.nextUrl.searchParams.get("videoId");
   if (!videoId) {
@@ -96,7 +84,7 @@ export async function DELETE(request: NextRequest) {
   }
 
   await prisma.favorite.deleteMany({
-    where: { userId: session.userId, videoId },
+    where: { userId: workspace.id, videoId },
   });
 
   return Response.json({ ok: true });

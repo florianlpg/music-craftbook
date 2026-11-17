@@ -1,17 +1,14 @@
-import { getSession } from "@/app/lib/session";
+import { getWorkspace } from "@/app/lib/workspace";
 import { prisma } from "@/app/lib/prisma";
 
 export async function PATCH(req: Request) {
-  const session = await getSession();
-  if (!session?.userId) {
-    return Response.json({ error: "Authentication required" }, { status: 401 });
-  }
+  const workspace = await getWorkspace();
 
   const { apiKey } = await req.json() as { apiKey: string };
   const value = typeof apiKey === "string" ? apiKey.trim() || null : null;
 
   await prisma.user.update({
-    where: { id: session.userId },
+    where: { id: workspace.id },
     data: { youtubeApiKey: value },
   });
 

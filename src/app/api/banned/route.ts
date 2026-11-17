@@ -1,15 +1,12 @@
 import { type NextRequest } from "next/server";
 import { prisma } from "@/app/lib/prisma";
-import { getSession } from "@/app/lib/session";
+import { getWorkspace } from "@/app/lib/workspace";
 
 export async function GET() {
-  const session = await getSession();
-  if (!session?.userId) {
-    return Response.json({ error: "Authentication required" }, { status: 401 });
-  }
+  const workspace = await getWorkspace();
 
   const banned = await prisma.bannedVideo.findMany({
-    where: { userId: session.userId },
+    where: { userId: workspace.id },
     orderBy: { createdAt: "desc" },
     select: { videoId: true, title: true, thumbnail: true, uploader: true, url: true, createdAt: true },
   });
@@ -19,10 +16,7 @@ export async function GET() {
 
 // POST — ban a video { videoId, title, thumbnail, uploader?, url }
 export async function POST(req: Request) {
-  const session = await getSession();
-  if (!session?.userId) {
-    return Response.json({ error: "Authentication required" }, { status: 401 });
-  }
+  const workspace = await getWorkspace();
 
   const { videoId, title, thumbnail, uploader, url } = await req.json() as {
     videoId: string; title: string; thumbnail: string; uploader?: string; url: string;
@@ -34,7 +28,7 @@ export async function POST(req: Request) {
 
   try {
     await prisma.bannedVideo.create({
-      data: { userId: session.userId, videoId, title, thumbnail, uploader: uploader ?? null, url },
+      data: { userId: workspace.id, videoId, title, thumbnail, uploader: uploader ?? null, url },
     });
   } catch {
     // Already banned — treat as success
@@ -45,10 +39,7 @@ export async function POST(req: Request) {
 
 // DELETE — unban a video ?videoId=xxx
 export async function DELETE(req: NextRequest) {
-  const session = await getSession();
-  if (!session?.userId) {
-    return Response.json({ error: "Authentication required" }, { status: 401 });
-  }
+  const workspace = await getWorkspace();
 
   const videoId = req.nextUrl.searchParams.get("videoId");
   if (!videoId) {
@@ -56,7 +47,7 @@ export async function DELETE(req: NextRequest) {
   }
 
   await prisma.bannedVideo.deleteMany({
-    where: { userId: session.userId, videoId },
+    where: { userId: workspace.id, videoId },
   });
 
   return Response.json({ ok: true });

@@ -1,14 +1,11 @@
 import { prisma } from "@/app/lib/prisma";
-import { getSession } from "@/app/lib/session";
+import { getWorkspace } from "@/app/lib/workspace";
 
 export async function GET() {
-  const session = await getSession();
-  if (!session?.userId) {
-    return Response.json({ error: "Authentication required" }, { status: 401 });
-  }
+  const workspace = await getWorkspace();
 
   const tags = await prisma.searchTag.findMany({
-    where: { userId: session.userId },
+    where: { userId: workspace.id },
     orderBy: { createdAt: "asc" },
     select: { name: true },
   });
@@ -18,10 +15,7 @@ export async function GET() {
 
 // POST — create a tag { name }
 export async function POST(req: Request) {
-  const session = await getSession();
-  if (!session?.userId) {
-    return Response.json({ error: "Authentication required" }, { status: 401 });
-  }
+  const workspace = await getWorkspace();
 
   const { name } = await req.json() as { name: string };
   if (!name?.trim()) {
@@ -30,7 +24,7 @@ export async function POST(req: Request) {
 
   try {
     await prisma.searchTag.create({
-      data: { userId: session.userId, name: name.trim() },
+      data: { userId: workspace.id, name: name.trim() },
     });
   } catch {
     // unique constraint — tag already exists, treat as success
@@ -41,10 +35,7 @@ export async function POST(req: Request) {
 
 // PATCH — rename a tag { from, to }
 export async function PATCH(req: Request) {
-  const session = await getSession();
-  if (!session?.userId) {
-    return Response.json({ error: "Authentication required" }, { status: 401 });
-  }
+  const workspace = await getWorkspace();
 
   const { from, to } = await req.json() as { from: string; to: string };
   if (!from?.trim() || !to?.trim()) {
@@ -52,7 +43,7 @@ export async function PATCH(req: Request) {
   }
 
   await prisma.searchTag.updateMany({
-    where: { userId: session.userId, name: from.trim() },
+    where: { userId: workspace.id, name: from.trim() },
     data: { name: to.trim() },
   });
 
@@ -61,10 +52,7 @@ export async function PATCH(req: Request) {
 
 // DELETE — delete a tag { name }
 export async function DELETE(req: Request) {
-  const session = await getSession();
-  if (!session?.userId) {
-    return Response.json({ error: "Authentication required" }, { status: 401 });
-  }
+  const workspace = await getWorkspace();
 
   const { name } = await req.json() as { name: string };
   if (!name?.trim()) {
@@ -72,7 +60,7 @@ export async function DELETE(req: Request) {
   }
 
   await prisma.searchTag.deleteMany({
-    where: { userId: session.userId, name: name.trim() },
+    where: { userId: workspace.id, name: name.trim() },
   });
 
   return Response.json({ ok: true });

@@ -1,12 +1,9 @@
 import { prisma } from "@/app/lib/prisma";
-import { getSession } from "@/app/lib/session";
+import { getWorkspace } from "@/app/lib/workspace";
 
 // PATCH /api/songs/folder — rename a folder { from: string, to: string }
 export async function PATCH(req: Request) {
-  const session = await getSession();
-  if (!session?.userId) {
-    return Response.json({ error: "Authentication required" }, { status: 401 });
-  }
+  const workspace = await getWorkspace();
 
   const body = await req.json();
   const { from, to } = body as { from: string; to: string };
@@ -16,7 +13,7 @@ export async function PATCH(req: Request) {
   }
 
   await prisma.note.updateMany({
-    where: { userId: session.userId, folder: from },
+    where: { userId: workspace.id, folder: from },
     data: { folder: to.trim() },
   });
 
@@ -25,10 +22,7 @@ export async function PATCH(req: Request) {
 
 // DELETE /api/songs/folder — delete a folder (removes songs from it, keeps notes) { name: string }
 export async function DELETE(req: Request) {
-  const session = await getSession();
-  if (!session?.userId) {
-    return Response.json({ error: "Authentication required" }, { status: 401 });
-  }
+  const workspace = await getWorkspace();
 
   const body = await req.json();
   const { name } = body as { name: string };
@@ -38,7 +32,7 @@ export async function DELETE(req: Request) {
   }
 
   await prisma.note.updateMany({
-    where: { userId: session.userId, folder: name },
+    where: { userId: workspace.id, folder: name },
     data: { folder: null },
   });
 

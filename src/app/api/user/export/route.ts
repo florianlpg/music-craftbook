@@ -1,13 +1,12 @@
 import { prisma } from "@/app/lib/prisma";
-import { getSession } from "@/app/lib/session";
+import { getWorkspace } from "@/app/lib/workspace";
 
 export async function GET() {
-  const session = await getSession();
-  if (!session?.userId) return Response.json({ error: "Unauthorized" }, { status: 401 });
+  const workspace = await getWorkspace();
 
   const user = await prisma.user.findUnique({
-    where: { id: session.userId },
-    include: { favorites: true, notes: true },
+    where: { id: workspace.id },
+    include: { favorites: true, notes: true, searchTags: true, bannedVideos: true },
   });
   if (!user) return Response.json({ error: "User not found" }, { status: 404 });
 
@@ -19,6 +18,8 @@ export async function GET() {
     },
     favorites: user.favorites,
     notes: user.notes,
+    tags: user.searchTags,
+    blockedVideos: user.bannedVideos,
     exportedAt: new Date().toISOString(),
   };
 

@@ -7,7 +7,6 @@ import Link from "next/link";
 
 type Format = "mp3" | "mp4" | "wav";
 type Tab = "download" | "search" | "favorites" | "songs" | "banned";
-type AuthMode = "login" | "signup";
 type DateFilter = "year" | "6months" | "1month" | "2weeks" | "1week" | "1day";
 type ArtistFilter = "Lil Peep" | "Juice WRLD";
 
@@ -506,88 +505,6 @@ function SearchFilters({
   );
 }
 
-// ─── Auth Form ────────────────────────────────────────────────
-
-function AuthForm({ onSuccess, oauthError }: { onSuccess: (user: { id: string; email: string; createdAt: string; hasPassword: boolean; hasYoutubeKey: boolean }) => void; oauthError?: boolean }) {
-  const [mode, setMode] = useState<AuthMode>("login");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(oauthError ? "Google sign-in failed. Please try again." : "");
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setError("");
-    setLoading(true);
-    try {
-      const endpoint = mode === "login" ? "/api/auth/login" : "/api/auth/signup";
-      const res = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Something went wrong");
-      const meRes = await fetch("/api/auth/me");
-      const meData = await meRes.json();
-      if (meData.user) onSuccess(meData.user);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Something went wrong");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  return (
-    <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-6 space-y-5 dark:border-zinc-700 dark:bg-zinc-800/50">
-      <div>
-        <h2 className="text-lg font-semibold">
-          {mode === "login" ? "Sign in to search" : "Create an account"}
-        </h2>
-        <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
-          {mode === "login"
-            ? "You need an account to access YouTube search."
-            : "Sign up for free to unlock YouTube search."}
-        </p>
-      </div>
-      <form onSubmit={handleSubmit} className="space-y-3">
-        <input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} required
-          className="w-full rounded-lg border border-zinc-300 bg-white px-4 py-2.5 text-sm outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500/20 dark:border-zinc-600 dark:bg-zinc-900" />
-        <input type="password" placeholder={mode === "signup" ? "Password (min. 8 characters)" : "Password"}
-          value={password} onChange={(e) => setPassword(e.target.value)} required
-          className="w-full rounded-lg border border-zinc-300 bg-white px-4 py-2.5 text-sm outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500/20 dark:border-zinc-600 dark:bg-zinc-900" />
-        {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600 dark:bg-red-950 dark:text-red-400">{error}</p>}
-        <button type="submit" disabled={loading}
-          className="w-full rounded-lg bg-red-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50 transition-colors">
-          {loading ? "Please wait..." : mode === "login" ? "Sign in" : "Create account"}
-        </button>
-      </form>
-      <div className="relative flex items-center gap-3">
-        <div className="flex-1 h-px bg-zinc-200 dark:bg-zinc-700" />
-        <span className="text-xs text-zinc-400">or</span>
-        <div className="flex-1 h-px bg-zinc-200 dark:bg-zinc-700" />
-      </div>
-      <a href="/api/auth/google"
-        className="flex items-center justify-center gap-2.5 w-full rounded-lg border border-zinc-300 bg-white px-4 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800 transition-colors">
-        <svg viewBox="0 0 24 24" className="w-4 h-4" aria-hidden="true">
-          <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
-          <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-          <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/>
-          <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
-        </svg>
-        Continue with Google
-      </a>
-      <p className="text-center text-sm text-zinc-500 dark:text-zinc-400">
-        {mode === "login" ? (
-          <>No account?{" "}<button onClick={() => { setMode("signup"); setError(""); }} className="font-medium text-red-600 hover:underline">Sign up</button></>
-        ) : (
-          <>Already have an account?{" "}<button onClick={() => { setMode("login"); setError(""); }} className="font-medium text-red-600 hover:underline">Sign in</button></>
-        )}
-      </p>
-    </div>
-  );
-}
-
 // ─── Result Card ──────────────────────────────────────────────
 
 function ResultCard({
@@ -759,9 +676,7 @@ function DownloaderForm() {
   const [downloading, setDownloading] = useState(false);
   const [error, setError] = useState("");
 
-  // Auth
-  const [user, setUser] = useState<{ id: string; email: string; createdAt: string; hasPassword: boolean; hasYoutubeKey: boolean } | null>(null);
-  const [authLoading, setAuthLoading] = useState(true);
+  const [hasYoutubeKey, setHasYoutubeKey] = useState(false);
 
   // URL analysis
   const [analysis, setAnalysis] = useState<BeatAnalysis | null>(null);
@@ -806,10 +721,10 @@ function DownloaderForm() {
   const { playingId, loadingId, play, stop } = usePreviewPlayer();
 
   useEffect(() => {
-    fetch("/api/auth/me")
+    fetch("/api/workspace")
       .then((r) => r.json())
-      .then((data) => setUser(data.user ?? null))
-      .finally(() => setAuthLoading(false));
+      .then((data) => setHasYoutubeKey(!!data.hasYoutubeKey))
+      .catch(() => {});
     try {
       const stored = localStorage.getItem("search-history");
       if (stored) setSearchHistory(JSON.parse(stored));
@@ -817,7 +732,6 @@ function DownloaderForm() {
   }, []);
 
   useEffect(() => {
-    if (!user) { setFavoriteIds(new Set()); setFavorites([]); return; }
     fetch("/api/favorites")
       .then((r) => r.json())
       .then((data) => {
@@ -844,18 +758,16 @@ function DownloaderForm() {
         setFavoriteIds(new Set(favs.map((f) => f.id)));
       })
       .catch(() => {});
-  }, [user]);
+  }, []);
 
   useEffect(() => {
-    if (!user) { setSavedTags([]); return; }
     fetch("/api/tags")
       .then((r) => r.json())
       .then((data) => setSavedTags(data.tags ?? []))
       .catch(() => {});
-  }, [user]);
+  }, []);
 
   useEffect(() => {
-    if (!user) { setBannedIds(new Set()); setBanned([]); return; }
     fetch("/api/banned")
       .then((r) => r.json())
       .then((data) => {
@@ -864,7 +776,7 @@ function DownloaderForm() {
         setBannedIds(new Set(items.map((b) => b.videoId)));
       })
       .catch(() => {});
-  }, [user]);
+  }, []);
 
   useEffect(() => {
     const params = new URLSearchParams();
@@ -1017,7 +929,6 @@ function DownloaderForm() {
   }
 
   async function handleToggleFavorite(result: SearchResult, filters?: SavedFilters) {
-    if (!user) return;
     const isFav = favoriteIds.has(result.id);
     const savedFilters: SavedFilters = filters ?? {
       dateFilter, freeFilter, artistFilter, typeBeat,
@@ -1061,20 +972,14 @@ function DownloaderForm() {
   }
 
   useEffect(() => {
-    if (tab !== "songs" || !user) return;
+    if (tab !== "songs") return;
     setSongsLoading(true);
     fetch("/api/songs")
       .then((r) => r.json())
       .then((data) => setSongs(data.songs ?? []))
       .finally(() => setSongsLoading(false));
-  }, [tab, user]);
+  }, [tab]);
 
-  async function handleLogout() {
-    await fetch("/api/auth/logout", { method: "POST" });
-    setUser(null); setResults([]); setFavorites([]); setFavoriteIds(new Set()); setSongs([]); setBanned([]); setBannedIds(new Set());
-    stop();
-    if (tab === "favorites" || tab === "songs" || tab === "banned") setTab("download");
-  }
 
   function handleBan(result: SearchResult) {
     const item: BannedItem = {
@@ -1143,16 +1048,11 @@ function DownloaderForm() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold">Music Craftbook</h1>
-          {!authLoading && user && (
-            <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3">
               <Link href="/settings" className="text-sm text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors">
                 Settings
               </Link>
-              <button onClick={handleLogout} className="text-sm text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors">
-                Sign out
-              </button>
             </div>
-          )}
         </div>
 
         {/* Tabs */}
@@ -1163,8 +1063,7 @@ function DownloaderForm() {
               {t === "download" ? "Paste URL" : "Search YouTube"}
             </button>
           ))}
-          {user && (
-            <button onClick={() => { setTab("favorites"); setError(""); }}
+          <button onClick={() => { setTab("favorites"); setError(""); }}
               className={`flex-1 px-4 py-2.5 text-sm font-medium transition-colors flex items-center justify-center gap-1.5 ${tab === "favorites" ? "bg-red-500 text-white" : "hover:bg-zinc-100 dark:hover:bg-zinc-800"}`}>
               <svg viewBox="0 0 24 24" className={`w-3.5 h-3.5 ${tab === "favorites" ? "text-yellow-300" : "text-yellow-400"}`} fill="currentColor">
                 <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
@@ -1176,9 +1075,7 @@ function DownloaderForm() {
                 </span>
               )}
             </button>
-          )}
-          {user && (
-            <button onClick={() => { setTab("songs"); setError(""); }}
+          <button onClick={() => { setTab("songs"); setError(""); }}
               className={`flex-1 px-4 py-2.5 text-sm font-medium transition-colors flex items-center justify-center gap-1.5 ${tab === "songs" ? "bg-red-500 text-white" : "hover:bg-zinc-100 dark:hover:bg-zinc-800"}`}>
               <svg viewBox="0 0 24 24" className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2}>
                 <path d="M9 18V5l12-2v13" />
@@ -1191,8 +1088,7 @@ function DownloaderForm() {
                 </span>
               )}
             </button>
-          )}
-          {user && bannedIds.size > 0 && (
+          {bannedIds.size > 0 && (
             <button onClick={() => { setTab("banned"); setError(""); }}
               className={`flex-1 px-4 py-2.5 text-sm font-medium transition-colors flex items-center justify-center gap-1.5 ${tab === "banned" ? "bg-red-500 text-white" : "hover:bg-zinc-100 dark:hover:bg-zinc-800"}`}>
               <svg viewBox="0 0 24 24" className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2}>
@@ -1246,7 +1142,7 @@ function DownloaderForm() {
                 <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-5 py-4 space-y-3 dark:border-zinc-700 dark:bg-zinc-800/50">
                   <div className="flex items-start justify-between gap-2">
                     <p className="font-semibold text-sm truncate" title={analysis.title}>{analysis.title}</p>
-                    {user && asResult && <StarButton favorited={favoriteIds.has(asResult.id)} onToggle={() => handleToggleFavorite(asResult)} />}
+                    {asResult && <StarButton favorited={favoriteIds.has(asResult.id)} onToggle={() => handleToggleFavorite(asResult)} />}
                   </div>
                   <BeatBadges analysis={analysis} />
                   {analysis.tags.length > 0 && (
@@ -1273,15 +1169,8 @@ function DownloaderForm() {
         {/* ── Search Tab ── */}
         {tab === "search" && (
           <>
-            {authLoading ? (
-              <div className="flex justify-center py-12">
-                <span className="h-6 w-6 animate-spin rounded-full border-2 border-zinc-300 border-t-red-500" />
-              </div>
-            ) : !user ? (
-              <AuthForm onSuccess={setUser} oauthError={searchParams.get("error") === "oauth_failed"} />
-            ) : (
-              <>
-                {!user.hasYoutubeKey && (
+            <>
+                {!hasYoutubeKey && (
                   <div className="rounded-lg bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700 px-4 py-3 flex items-center justify-between gap-3">
                     <p className="text-xs text-zinc-500 dark:text-zinc-400">
                       Using yt-dlp for search (slower). Add a{" "}
@@ -1473,12 +1362,11 @@ function DownloaderForm() {
                   <p className="text-center text-sm text-zinc-400 py-8">No results. Try a different search.</p>
                 )}
               </>
-            )}
           </>
         )}
 
         {/* ── Favorites Tab ── */}
-        {tab === "favorites" && user && (
+        {tab === "favorites" && (
           favorites.length === 0 ? (
             <div className="flex flex-col items-center gap-3 py-16 text-zinc-400">
               <svg viewBox="0 0 24 24" className="w-12 h-12 text-zinc-200 dark:text-zinc-700" fill="none" stroke="currentColor" strokeWidth={1.5}>
@@ -1518,7 +1406,7 @@ function DownloaderForm() {
         )}
 
         {/* ── Songs Tab ── */}
-        {tab === "songs" && user && (() => {
+        {tab === "songs" && (() => {
           // Group songs into folders and an unfiled list
           const folderMap = new Map<string, SongItem[]>();
           const unfiled: SongItem[] = [];
@@ -1812,7 +1700,7 @@ function DownloaderForm() {
           );
         })()}
 
-        {tab === "banned" && user && (
+        {tab === "banned" && (
           <div className="space-y-3">
             {banned.length === 0 ? (
               <div className="flex flex-col items-center gap-3 py-16 text-zinc-400">

@@ -75,7 +75,7 @@ Find beat → Save → Write → Record → Sync → Share
 
 - Search YouTube with smart filters (type beats, artists, recency)
 - **YouTube Data API v3** — fast, reliable search powered by your own API key (free tier, set up in Settings)
-- **Custom search tags** — build a personal library of keyword tags, toggle them on/off per search, rename or delete anytime (saved to your account)
+- **Custom search tags** — build a personal library of keyword tags, toggle them on/off per search, rename or delete anytime (saved to your personal workspace)
 - **Search history** — last 15 searches remembered, restore any with one click
 - **Pagination** — browse more results with "Load more" (cursor-based, no artificial cap)
 - **Search summary** — result count, active query, and filter badges above every result list
@@ -162,21 +162,11 @@ Capture ideas exactly where they belong in the beat.
 
 ---
 
-### 🔐 Authentication
+### ⚙️ Settings
 
-- Email + password sign-up / sign-in
-- **Google OAuth** — one-click sign-in, auto-links to existing email account
-- Session stored in a secure `httpOnly` cookie (7-day JWT)
-
----
-
-### ⚙️ Account Settings
-
-- **YouTube API key** — store your own YouTube Data API v3 key; required to search and analyze beats
-- Change email address
-- Change or set a password
-- **Export all your data** as JSON (GDPR Art. 20)
-- **Delete your account** — permanently erases all favorites, notes, and recordings (GDPR Art. 17)
+- Optional **YouTube API key** for faster search and analysis (yt-dlp is used without a key)
+- **Export your data** as JSON
+- All features are available immediately in one personal workspace
 
 ---
 
@@ -188,7 +178,7 @@ Turn notes into a **shareable experience**:
 - Listen + read in sync
 - Send one clean link
 
-👉 Perfect for collaboration and feedback
+Read-only links let others listen and read.
 
 ![Shared](./images/shared_note_view.png)
 
@@ -199,7 +189,7 @@ Turn notes into a **shareable experience**:
 Keep your search results clean:
 
 - Click "Never show again" on any search result
-- The video is immediately hidden and saved to your account
+- The video is immediately hidden and saved to your personal workspace
 - View and manage all blocked videos in the **Blocked** tab
 - Unblock any video with one click
 
@@ -216,18 +206,6 @@ Keep your sessions tidy with folders:
 
 ---
 
-### 👥 Real-time Collaboration
-
-Work on lyrics together, live:
-
-- Generate a collaboration invite link from any note
-- Collaborators join without needing to own the note
-- Block and timecode changes sync instantly to all participants
-- Peer presence — see who's in the session
-- Changes are auto-saved with a short debounce
-
----
-
 ## 🧱 Tech Stack
 
 | Layer | Technology |
@@ -236,9 +214,8 @@ Work on lyrics together, live:
 | Language | TypeScript |
 | Styling | Tailwind CSS |
 | Database | PostgreSQL + Prisma |
-| Auth | JWT (jose) + bcrypt + Google OAuth 2.0 |
+| Access | Personal workspace, no sign-in |
 | Search | yt-dlp · custom tags · history · pagination |
-| Real-time | Socket.io (custom Node.js server) |
 | YouTube | yt-dlp |
 | Audio | ffmpeg |
 | Infra | Docker Compose |
@@ -281,9 +258,6 @@ npm run dev
 | Variable | Description |
 |----------|------------|
 | `DATABASE_URL` | PostgreSQL connection string |
-| `SESSION_SECRET` | Secret used to sign session JWTs |
-| `GOOGLE_CLIENT_ID` | Google OAuth app client ID |
-| `GOOGLE_CLIENT_SECRET` | Google OAuth app client secret |
 | `APP_URL` | Public base URL (e.g. `http://localhost:3000`) |
 
 > Set these in `.env.local` for the Next.js dev server and in `.env` for Prisma CLI commands.
@@ -310,3 +284,13 @@ PRs, ideas, and feedback welcome.
 
 If this project helps you, drop a star 🙌
 
+
+### Personal workspace
+
+The app opens without sign-in. All visitors can use the same favorites, songs, notes, tags, blocked videos, and YouTube key settings. Run this personal app on a private machine or trusted network.
+
+On first use, existing accounts’ favorites, notes (including songs, folders, voice recordings and timecodes), tags, blocked videos, and the first saved YouTube key are imported into a fixed personal workspace in one transaction. Original content rows remain as a backup; public link IDs transfer to the imported notes. Duplicate favorites combine tags and artist lists; duplicate notes combine distinct blocks and timecodes, keeping the first nonempty metadata. Other account versions remain in the database. Import runs only once, so removing personal items does not bring old copies back after a restart. No schema migration is required. Google OAuth and session secrets are no longer needed.
+
+Live collaboration, invite links, and the Socket.io server have been removed. Notes save through the normal notes API. Existing editToken columns are retained as unused legacy data; public read-only sharing remains available.
+
+Run `npm test` to check fresh-workspace creation and cookie-free library access, note saves, and YouTube key settings with a mocked database.
