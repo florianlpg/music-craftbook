@@ -1,4 +1,4 @@
-import { Prisma } from "@prisma/client";
+import type { Prisma } from "../../generated/prisma/client";
 import { prisma } from "./prisma";
 
 export const WORKSPACE_ID = "personal-workspace-v1";

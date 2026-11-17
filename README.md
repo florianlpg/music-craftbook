@@ -227,7 +227,7 @@ Keep your sessions tidy with folders:
 ### Prerequisites
 
 - Docker
-- Node.js 20+
+- Node.js 22.12+ (Docker uses Node.js 22)
 
 ### Run with Docker
 
@@ -294,3 +294,5 @@ On first use, existing accounts’ favorites, notes (including songs, folders, v
 Live collaboration, invite links, and the Socket.io server have been removed. Notes save through the normal notes API. Existing editToken columns are retained as unused legacy data; public read-only sharing remains available.
 
 Run `npm test` to check fresh-workspace creation and cookie-free library access, note saves, and YouTube key settings with a mocked database.
+
+Dependency maintenance: Next.js and its ESLint config are kept on the same version; React and React DOM are updated together. Prisma 7 uses `@prisma/adapter-pg`, generates its client into `src/generated/prisma`, and reads CLI settings from `prisma.config.ts`. `prisma generate` does not require a live database; migration commands require `DATABASE_URL`. TypeScript stays on the Prisma-recommended 5.9 line and Node types match the Node 22 container runtime.
