@@ -42,6 +42,11 @@ interface FavoriteItem extends SearchResult {
   savedFilters: SavedFilters;
 }
 
+interface SongCreation {
+  videoId: string;
+  pending: boolean;
+}
+
 interface SearchHistoryEntry {
   rawInput: string;
   builtQuery: string;
@@ -252,7 +257,7 @@ function BeatBadges({ analysis }: { analysis: BeatAnalysis }) {
 
 // ─── Star Button ──────────────────────────────────────────────
 
-function StarButton({ favorited, onToggle }: { favorited: boolean; onToggle: () => void }) {
+function StarButton({ favorited, onToggle, disabled }: { favorited: boolean; onToggle: () => void; disabled?: boolean }) {
   const [burst, setBurst] = useState(false);
 
   function handleClick() {
@@ -261,7 +266,7 @@ function StarButton({ favorited, onToggle }: { favorited: boolean; onToggle: () 
   }
 
   return (
-    <button onClick={handleClick} title={favorited ? "Remove from favorites" : "Add to favorites"} className="flex-shrink-0 focus:outline-none">
+    <button onClick={handleClick} disabled={disabled} title={favorited ? "Remove from favorites" : "Add to favorites"} className="flex-shrink-0 focus:outline-none">
       <svg
         viewBox="0 0 24 24"
         className={`transition-all duration-200 ${burst ? "scale-150" : favorited ? "scale-125" : "scale-100"} ${favorited ? "text-yellow-400" : "text-zinc-300 dark:text-zinc-600"}`}
@@ -511,6 +516,7 @@ function SearchFilters({
 
 function ResultCard({
   result, playingId, loadingId, onPlay, onDownload, downloading, favorited, onToggleFavorite, onSearchWithFilters, onNotes, onBan,
+  onCreateSong, songCreation,
 }: {
   result: SearchResult;
   playingId: string | null;
@@ -523,10 +529,13 @@ function ResultCard({
   onSearchWithFilters?: () => void;
   onNotes?: () => void;
   onBan?: () => void;
+  onCreateSong?: () => void;
+  songCreation?: SongCreation | null;
 }) {
   const isPlaying = playingId === result.id;
   const isLoading = loadingId === result.id;
   const isDownloading = downloading === result.id;
+  const isCreatingSong = songCreation?.videoId === result.id && songCreation.pending;
 
   return (
     <div className="flex gap-3 rounded-lg border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-700 dark:bg-zinc-800/50">
@@ -561,7 +570,7 @@ function ResultCard({
             <p className="text-sm font-semibold leading-tight line-clamp-2" title={result.title}>
               {result.title}
             </p>
-            <StarButton favorited={favorited} onToggle={() => onToggleFavorite(result)} />
+            <StarButton favorited={favorited} onToggle={() => onToggleFavorite(result)} disabled={isCreatingSong} />
           </div>
           <BeatBadges analysis={result} />
           {result.tags.length > 0 && (
@@ -602,6 +611,17 @@ function ResultCard({
           </div>
         </div>
         <div className="mt-2 flex items-center gap-2 flex-wrap">
+          {onCreateSong && (
+            <button
+              type="button"
+              onClick={onCreateSong}
+              disabled={songCreation?.pending}
+              aria-busy={isCreatingSong}
+              className="whitespace-nowrap rounded-md border border-red-300 px-2.5 py-1 text-xs font-semibold text-red-700 transition-colors enabled:hover:bg-red-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 disabled:opacity-50 dark:border-red-800 dark:text-red-300 dark:enabled:hover:bg-red-950/50"
+            >
+              {isCreatingSong ? "Creating song…" : "Create song"}
+            </button>
+          )}
           <button
             onClick={() => onDownload(result.id)}
             disabled={isDownloading}
@@ -657,6 +677,11 @@ function ResultCard({
             </button>
           )}
         </div>
+        {songCreation?.videoId === result.id && !songCreation.pending && (
+          <p role="alert" className="mt-2 text-xs text-red-700 dark:text-red-300">
+            Couldn’t create the song. Try again.
+          </p>
+        )}
       </div>
     </div>
   );
@@ -711,6 +736,7 @@ function DownloaderForm() {
   // Songs
   const [songs, setSongs] = useState<SongItem[]>([]);
   const [songsLoading, setSongsLoading] = useState(false);
+  const [songCreation, setSongCreation] = useState<SongCreation | null>(null);
 
   // Banned
   const [bannedIds, setBannedIds] = useState<Set<string>>(new Set());
@@ -948,6 +974,44 @@ function DownloaderForm() {
     finally { setDownloadingFav(null); }
   }
 
+  async function saveFavorite(result: SearchResult, savedFilters: SavedFilters, createSong = false) {
+    const response = await fetch("/api/favorites", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        videoId: result.id, title: result.title, thumbnail: result.thumbnail,
+        duration: result.duration, durationSec: result.durationSec, url: result.url,
+        bpm: result.bpm, key: result.key, beatType: result.beatType,
+        inspiredBy: result.inspiredBy, tags: result.tags,
+        ...savedFilters,
+        createSong,
+      }),
+    });
+    if (!response.ok) throw new Error("Couldn’t save favorite.");
+  }
+
+  async function handleCreateSong(result: SearchResult, filters: SavedFilters) {
+    if (songCreation?.pending) return;
+    setSongCreation({ videoId: result.id, pending: true });
+    const savedFilters = {
+      dateFilter: filters.dateFilter,
+      freeFilter: filters.freeFilter,
+      artistFilter: filters.artistFilter,
+      typeBeat: filters.typeBeat,
+    };
+    try {
+      await saveFavorite(result, savedFilters, true);
+      setFavoriteIds((prev) => new Set(prev).add(result.id));
+      setFavorites((prev) => prev.some((favorite) => favorite.id === result.id)
+        ? prev
+        : [{ ...result, savedFilters }, ...prev]);
+      stop();
+      router.push(`/notes/${encodeURIComponent(result.id)}`);
+    } catch {
+      setSongCreation({ videoId: result.id, pending: false });
+    }
+  }
+
   async function handleToggleFavorite(result: SearchResult, filters?: SavedFilters) {
     const isFav = favoriteIds.has(result.id);
     const savedFilters: SavedFilters = filters ?? {
@@ -965,20 +1029,7 @@ function DownloaderForm() {
       if (isFav) {
         await fetch(`/api/favorites?videoId=${result.id}`, { method: "DELETE" });
       } else {
-        await fetch("/api/favorites", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            videoId: result.id, title: result.title, thumbnail: result.thumbnail,
-            duration: result.duration, durationSec: result.durationSec, url: result.url,
-            bpm: result.bpm, key: result.key, beatType: result.beatType,
-            inspiredBy: result.inspiredBy, tags: result.tags,
-            dateFilter: savedFilters.dateFilter,
-            freeFilter: savedFilters.freeFilter,
-            artistFilter: savedFilters.artistFilter,
-            typeBeat: savedFilters.typeBeat,
-          }),
-        });
+        await saveFavorite(result, savedFilters);
       }
     } catch {
       if (isFav) {
@@ -1342,6 +1393,8 @@ function DownloaderForm() {
                       <ResultCard key={result.id} result={result} playingId={playingId} loadingId={loadingId}
                         onPlay={play} onDownload={handleDownloadResult} downloading={downloadingResult}
                         favorited={favoriteIds.has(result.id)} onToggleFavorite={handleToggleFavorite}
+                        onCreateSong={() => void handleCreateSong(result, activeSearch)}
+                        songCreation={songCreation}
                         onBan={() => handleBan(result)} />
                     ))}
 

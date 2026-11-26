@@ -20,33 +20,64 @@ export async function POST(request: NextRequest) {
   const {
     videoId, title, thumbnail, duration, durationSec, url,
     bpm, key, beatType, inspiredBy, tags,
-    dateFilter, freeFilter, artistFilter, typeBeat,
+    dateFilter, freeFilter, artistFilter, typeBeat, createSong,
   } = body;
 
   if (!videoId || !title || !url) {
     return Response.json({ error: "Missing required fields" }, { status: 400 });
   }
 
+  const beat = { userId: workspace.id, videoId };
+  const where = { userId_videoId: beat };
+  const data = {
+    ...beat,
+    title,
+    thumbnail: thumbnail ?? "",
+    duration: duration ?? "",
+    durationSec: durationSec ?? 0,
+    url,
+    bpm: bpm ?? null,
+    key: key ?? null,
+    beatType: beatType ?? null,
+    inspiredBy: inspiredBy ?? [],
+    tags: tags ?? [],
+    dateFilter: dateFilter ?? null,
+    freeFilter: freeFilter ?? false,
+    artistFilter: artistFilter ?? null,
+    typeBeat: typeBeat ?? false,
+  };
+
+  if (createSong === true) {
+    const favorite = await prisma.$transaction(async (tx) => {
+      await tx.favorite.createMany({ data, skipDuplicates: true });
+      const saved = await tx.favorite.findUniqueOrThrow({ where });
+
+      await tx.note.createMany({
+        data: {
+          ...beat,
+          songName: title,
+          bpm: saved.bpm,
+          key: saved.key,
+          beatType: saved.beatType,
+          videoTitle: saved.title,
+          videoThumbnail: saved.thumbnail,
+          videoUrl: saved.url,
+        },
+        skipDuplicates: true,
+      });
+      // Promote an existing draft without replacing its contents or metadata.
+      await tx.note.updateMany({
+        where: { ...beat, OR: [{ songName: null }, { songName: "" }] },
+        data: { songName: title },
+      });
+      return saved;
+    });
+    return Response.json({ favorite });
+  }
+
   const favorite = await prisma.favorite.upsert({
-    where: { userId_videoId: { userId: workspace.id, videoId } },
-    create: {
-      userId: workspace.id,
-      videoId,
-      title,
-      thumbnail: thumbnail ?? "",
-      duration: duration ?? "",
-      durationSec: durationSec ?? 0,
-      url,
-      bpm: bpm ?? null,
-      key: key ?? null,
-      beatType: beatType ?? null,
-      inspiredBy: inspiredBy ?? [],
-      tags: tags ?? [],
-      dateFilter: dateFilter ?? null,
-      freeFilter: freeFilter ?? false,
-      artistFilter: artistFilter ?? null,
-      typeBeat: typeBeat ?? false,
-    },
+    where,
+    create: data,
     update: {},
   });
 
