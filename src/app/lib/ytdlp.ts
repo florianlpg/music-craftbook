@@ -2,6 +2,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
+import { extractMusicalKey } from "./musical-key";
 
 export const execFileAsync = promisify(execFile);
 
@@ -96,20 +97,7 @@ export function analyzeBeatInfo(
     }
   }
 
-  // Extract key
-  let key: string | null = null;
-  const keyPatterns = [
-    /\b([A-G][#b]?\s*(?:major|minor|maj|min))\b/i,
-    /key\s*(?:of\s+)?[:\-–]?\s*([A-G][#b]?\s*(?:major|minor|maj|min)?(?:\s*m)?)\b/i,
-    /\b([A-G][#b]?m(?:aj|in)?(?:or)?)\b/i,
-  ];
-  for (const pat of keyPatterns) {
-    const m = all.match(pat);
-    if (m) {
-      key = m[1].trim();
-      break;
-    }
-  }
+  const key = extractMusicalKey(title, description, comments);
 
   // Extract beat type from title/description
   let beatType: string | null = null;

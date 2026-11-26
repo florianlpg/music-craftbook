@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Suspense } from "react";
 import Link from "next/link";
+import { MUSICAL_KEYS, normalizeMusicalKey, type MusicalKey } from "@/app/lib/musical-key";
 
 type Format = "mp3" | "mp4" | "wav";
 type Tab = "download" | "search" | "favorites" | "songs" | "banned";
@@ -49,6 +50,7 @@ interface SearchHistoryEntry {
   artistFilter: ArtistFilter | null;
   typeBeat: boolean;
   customFilters: string[];
+  musicalKey?: MusicalKey | null;
   timestamp: number;
 }
 
@@ -691,12 +693,13 @@ function DownloaderForm() {
   const [typeBeat, setTypeBeat] = useState(false);
   const [customFilters, setCustomFilters] = useState<string[]>([]);
   const [savedTags, setSavedTags] = useState<string[]>([]);
+  const [musicalKey, setMusicalKey] = useState<MusicalKey | null>(null);
   const [searching, setSearching] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [results, setResults] = useState<SearchResult[]>([]);
   const [nextPageToken, setNextPageToken] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
-  const [activeQuery, setActiveQuery] = useState<string | null>(null);
+  const [activeSearch, setActiveSearch] = useState<SearchHistoryEntry | null>(null);
   const [searchHistory, setSearchHistory] = useState<SearchHistoryEntry[]>([]);
   const [downloadingResult, setDownloadingResult] = useState<string | null>(null);
 
@@ -719,6 +722,8 @@ function DownloaderForm() {
   const [newFolderInput, setNewFolderInput] = useState("");
 
   const { playingId, loadingId, play, stop } = usePreviewPlayer();
+  const activeQuery = activeSearch?.builtQuery;
+  const visibleResults = results.filter((result) => !bannedIds.has(result.id));
 
   useEffect(() => {
     fetch("/api/workspace")
@@ -827,19 +832,29 @@ function DownloaderForm() {
 
   function saveToHistory(entry: SearchHistoryEntry) {
     setSearchHistory((prev) => {
-      const filtered = prev.filter((e) => e.builtQuery !== entry.builtQuery);
+      const filtered = prev.filter((e) =>
+        e.builtQuery !== entry.builtQuery ||
+        (e.musicalKey ?? null) !== (entry.musicalKey ?? null)
+      );
       const next = [entry, ...filtered].slice(0, 15);
       try { localStorage.setItem("search-history", JSON.stringify(next)); } catch {}
       return next;
     });
   }
 
-  async function runSearch(q: string, df: DateFilter | null = dateFilter) {
-    if (!q) return;
+  function searchParamsFor(entry: SearchHistoryEntry) {
+    const params = new URLSearchParams({ q: entry.builtQuery });
+    if (entry.dateFilter) params.set("dateFilter", entry.dateFilter);
+    if (entry.musicalKey) params.set("musicalKey", entry.musicalKey);
+    return params;
+  }
+
+  async function runSearch(entry: SearchHistoryEntry) {
+    if (!entry.builtQuery || searching || loadingMore) return;
     stop(); setSearching(true); setError(""); setResults([]); setNextPageToken(null); setHasMore(false);
+    setActiveSearch(null);
     try {
-      const params = new URLSearchParams({ q });
-      if (df) params.set("dateFilter", df);
+      const params = searchParamsFor(entry);
       const res = await fetch(`/api/search?${params}`);
       const d = await res.json().catch(() => null);
       if (!res.ok) {
@@ -849,7 +864,8 @@ function DownloaderForm() {
       setResults(d.results || []);
       setNextPageToken(d.nextPageToken ?? null);
       setHasMore(!!d.nextPageToken);
-      setActiveQuery(q);
+      setActiveSearch(entry);
+      saveToHistory(entry);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Search failed");
     } finally { setSearching(false); }
@@ -857,30 +873,33 @@ function DownloaderForm() {
 
   async function handleSearch(e: React.FormEvent) {
     e.preventDefault();
-    const q = buildSearchQuery(searchQuery, artistFilter, typeBeat, freeFilter, customFilters);
+    const q = buildSearchQuery(searchQuery, artistFilter, typeBeat, freeFilter, customFilters) || (musicalKey ? "beat" : "");
     if (!q) return;
-    await runSearch(q);
-    saveToHistory({ rawInput: searchQuery, builtQuery: q, dateFilter, freeFilter, artistFilter, typeBeat, customFilters, timestamp: Date.now() });
+    await runSearch({ rawInput: searchQuery, builtQuery: q, dateFilter, freeFilter, artistFilter, typeBeat, customFilters, musicalKey, timestamp: Date.now() });
   }
 
   async function searchExpansion(q: string) {
+    const scopedMusicalKey = activeSearch?.musicalKey ?? null;
+    setMusicalKey(scopedMusicalKey);
     setSearchQuery(q);
-    setArtistFilter(null); setTypeBeat(false); setFreeFilter(false); setCustomFilters([]);
-    await runSearch(q, null);
-    saveToHistory({ rawInput: q, builtQuery: q, dateFilter: null, freeFilter: false, artistFilter: null, typeBeat: false, customFilters: [], timestamp: Date.now() });
+    setArtistFilter(null); setTypeBeat(false); setFreeFilter(false); setCustomFilters([]); setDateFilter(null);
+    await runSearch({ rawInput: q, builtQuery: q, dateFilter: null, freeFilter: false, artistFilter: null, typeBeat: false, customFilters: [], musicalKey: scopedMusicalKey, timestamp: Date.now() });
   }
 
   async function handleLoadMore() {
-    const q = activeQuery;
-    if (!q || !nextPageToken) return;
+    if (!activeSearch || !nextPageToken || loadingMore) return;
     setLoadingMore(true);
+    setError("");
     try {
-      const params = new URLSearchParams({ q, pageToken: nextPageToken });
-      if (dateFilter) params.set("dateFilter", dateFilter);
+      const params = searchParamsFor(activeSearch);
+      params.set("pageToken", nextPageToken);
       const res = await fetch(`/api/search?${params}`);
       if (!res.ok) { const d = await res.json().catch(() => null); throw new Error(d?.error || "Search failed"); }
-      const data = await res.json();
-      setResults((prev) => [...prev, ...(data.results || [])]);
+      const data = await res.json() as { results: SearchResult[]; nextPageToken: string | null };
+      setResults((prev) => {
+        const seen = new Set(prev.map((result) => result.id));
+        return [...prev, ...data.results.filter((result) => !seen.has(result.id))];
+      });
       setNextPageToken(data.nextPageToken ?? null);
       setHasMore(!!data.nextPageToken);
     } catch (e) {
@@ -895,6 +914,7 @@ function DownloaderForm() {
     setArtistFilter(entry.artistFilter);
     setTypeBeat(entry.typeBeat);
     setCustomFilters(entry.customFilters);
+    setMusicalKey(entry.musicalKey ?? null);
   }
 
   async function downloadBlob(url: string, fallbackName: string) {
@@ -1193,20 +1213,36 @@ function DownloaderForm() {
                   onDeleteTag={handleDeleteTag}
                 />
 
-                <form onSubmit={handleSearch} className="flex gap-2">
-                  <input type="text" placeholder={
-                    artistFilter ? `${artistFilter} type beat…`
-                    : typeBeat ? "type beat…"
-                    : "Search beats, instrumentals, songs…"
-                  }
-                    value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
-                    className="flex-1 rounded-lg border border-zinc-300 bg-white px-4 py-3 text-base outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500/20 dark:border-zinc-700 dark:bg-zinc-900" />
-                  <button type="submit" disabled={searching || (!searchQuery.trim() && !artistFilter && !typeBeat && !freeFilter && !customFilters.length)}
-                    className="rounded-lg bg-red-600 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-red-700 disabled:opacity-50">
-                    {searching
-                      ? <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
-                      : "Search"}
-                  </button>
+                <form onSubmit={handleSearch} className="space-y-3">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                    <label htmlFor="musical-key" className="text-[11px] font-semibold uppercase tracking-wide text-zinc-600 dark:text-zinc-400">
+                      Musical key
+                    </label>
+                    <select
+                      id="musical-key"
+                      value={musicalKey ?? ""}
+                      onChange={(event) => setMusicalKey(normalizeMusicalKey(event.target.value))}
+                      className="rounded-md border border-zinc-300 bg-white px-2.5 py-1.5 text-xs text-zinc-700 focus-visible:outline-2 focus-visible:outline-red-500 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200"
+                    >
+                      <option value="">Any key</option>
+                      {MUSICAL_KEYS.map((key) => <option key={key} value={key}>{key}</option>)}
+                    </select>
+                  </div>
+                  <div className="flex gap-2">
+                    <input type="text" placeholder={
+                      artistFilter ? `${artistFilter} type beat…`
+                      : typeBeat ? "type beat…"
+                      : "Search beats, instrumentals, songs…"
+                    }
+                      value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
+                      className="min-w-0 flex-1 rounded-lg border border-zinc-300 bg-white px-4 py-3 text-base outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500/20 dark:border-zinc-700 dark:bg-zinc-900" />
+                    <button type="submit" disabled={searching || loadingMore || (!musicalKey && !searchQuery.trim() && !artistFilter && !typeBeat && !freeFilter && !customFilters.length)}
+                      className="rounded-lg bg-red-600 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-red-700 disabled:opacity-50">
+                      {searching
+                        ? <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+                        : "Search"}
+                    </button>
+                  </div>
                 </form>
 
                 {hasActiveFilters && (
@@ -1236,7 +1272,8 @@ function DownloaderForm() {
                     </div>
                     <div className="space-y-1">
                       {searchHistory.slice(0, 8).map((entry) => {
-                        const isActive = entry.builtQuery === activeQuery;
+                        const isActive = entry.builtQuery === activeQuery &&
+                          (entry.musicalKey ?? null) === (activeSearch?.musicalKey ?? null);
                         const ageMs = Date.now() - entry.timestamp;
                         const ageLabel = ageMs < 60000 ? "just now"
                           : ageMs < 3600000 ? `${Math.floor(ageMs / 60000)}m ago`
@@ -1244,7 +1281,7 @@ function DownloaderForm() {
                           : `${Math.floor(ageMs / 86400000)}d ago`;
                         return (
                           <button
-                            key={entry.timestamp}
+                            key={`${entry.builtQuery}:${entry.musicalKey ?? ""}`}
                             onClick={() => applyHistoryEntry(entry)}
                             className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg border text-left transition-colors ${isActive ? "border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20" : "border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-900/50"}`}
                           >
@@ -1259,6 +1296,7 @@ function DownloaderForm() {
                             )}
                             <span className={`flex-1 min-w-0 text-sm truncate ${isActive ? "font-semibold text-red-600 dark:text-red-400" : "text-zinc-700 dark:text-zinc-300"}`}>
                               {entry.builtQuery}
+                              {entry.musicalKey && <span className="ml-1">· {entry.musicalKey}</span>}
                             </span>
                             <span className="flex-shrink-0 text-xs text-zinc-400">{ageLabel}</span>
                             {isActive && (
@@ -1272,34 +1310,35 @@ function DownloaderForm() {
                 )}
 
                 {searching && results.length === 0 && (
-                  <div className="flex items-center justify-center py-12">
+                  <div role="status" className="flex items-center justify-center py-12">
                     <div className="flex items-center gap-3 text-zinc-500 dark:text-zinc-400">
                       <span className="h-5 w-5 animate-spin rounded-full border-2 border-zinc-300 border-t-red-500" />
-                      Searching and analyzing results…
+                      {musicalKey ? `Looking for beats in ${musicalKey}…` : "Searching and analyzing results…"}
                     </div>
                   </div>
                 )}
 
-                {results.length > 0 && (
+                {activeSearch && (visibleResults.length > 0 || hasMore) && (
                   <div className="space-y-3">
                     {/* Search summary */}
                     <div className="flex items-center gap-2 flex-wrap text-xs text-zinc-500 dark:text-zinc-400 pb-1 border-b border-zinc-100 dark:border-zinc-800">
                       <span className="font-semibold text-zinc-700 dark:text-zinc-200">
-                        {results.length}{hasMore ? "+" : ""} beat{results.length !== 1 ? "s" : ""}
+                        {visibleResults.length}{hasMore ? "+" : ""} beat{visibleResults.length !== 1 ? "s" : ""}
                       </span>
                       {loadingMore && <span className="h-3 w-3 animate-spin rounded-full border border-zinc-300 border-t-zinc-600 dark:border-zinc-600 dark:border-t-zinc-300" />}
                       <span className="text-zinc-300 dark:text-zinc-600">·</span>
                       <span className="italic truncate max-w-[180px]">&ldquo;{activeQuery}&rdquo;</span>
-                      {dateFilter && <span className="rounded-full bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5">{dateFilter}</span>}
-                      {freeFilter && <span className="rounded-full bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 px-2 py-0.5">Free</span>}
-                      {artistFilter && <span className="rounded-full bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 px-2 py-0.5">{artistFilter}</span>}
-                      {typeBeat && <span className="rounded-full bg-red-50 dark:bg-red-900/20 text-red-500 dark:text-red-400 px-2 py-0.5">Type beat</span>}
-                      {customFilters.map((f) => (
+                      {activeSearch.musicalKey && <span className="rounded-full bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5">{activeSearch.musicalKey}</span>}
+                      {activeSearch.dateFilter && <span className="rounded-full bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5">{activeSearch.dateFilter}</span>}
+                      {activeSearch.freeFilter && <span className="rounded-full bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 px-2 py-0.5">Free</span>}
+                      {activeSearch.artistFilter && <span className="rounded-full bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 px-2 py-0.5">{activeSearch.artistFilter}</span>}
+                      {activeSearch.typeBeat && <span className="rounded-full bg-red-50 dark:bg-red-900/20 text-red-500 dark:text-red-400 px-2 py-0.5">Type beat</span>}
+                      {activeSearch.customFilters.map((f) => (
                         <span key={f} className="rounded-full bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5">{f}</span>
                       ))}
                     </div>
 
-                    {results.filter((r) => !bannedIds.has(r.id)).map((result) => (
+                    {visibleResults.map((result) => (
                       <ResultCard key={result.id} result={result} playingId={playingId} loadingId={loadingId}
                         onPlay={play} onDownload={handleDownloadResult} downloading={downloadingResult}
                         favorited={favoriteIds.has(result.id)} onToggleFavorite={handleToggleFavorite}
@@ -1308,6 +1347,9 @@ function DownloaderForm() {
 
                     {/* Load more / pagination */}
                     <div className="pt-2 flex flex-col items-center gap-2">
+                      {hasMore && activeSearch.musicalKey && visibleResults.length === 0 && (
+                        <p className="text-sm text-zinc-600 dark:text-zinc-400">No beats in {activeSearch.musicalKey} found yet.</p>
+                      )}
                       {hasMore ? (
                         <button
                           onClick={handleLoadMore}
@@ -1324,7 +1366,7 @@ function DownloaderForm() {
                               <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2}>
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
                               </svg>
-                              Load more results
+                              {activeSearch.musicalKey ? "Find more matches" : "Load more results"}
                             </>
                           )}
                         </button>
@@ -1358,8 +1400,12 @@ function DownloaderForm() {
                   </div>
                 )}
 
-                {!searching && results.length === 0 && (searchQuery || hasActiveFilters) && activeQuery && (
-                  <p className="text-center text-sm text-zinc-400 py-8">No results. Try a different search.</p>
+                {!searching && !hasMore && visibleResults.length === 0 && activeSearch && (
+                  <p className="text-center text-sm text-zinc-600 dark:text-zinc-400 py-8">
+                    {activeSearch.musicalKey
+                      ? `No beats found in ${activeSearch.musicalKey}. Try different keywords or choose Any key.`
+                      : "No results. Try a different search."}
+                  </p>
                 )}
               </>
           </>
@@ -1395,8 +1441,12 @@ function DownloaderForm() {
                     setFreeFilter(sf.freeFilter);
                     setArtistFilter(sf.artistFilter);
                     setTypeBeat(sf.typeBeat);
+                    setMusicalKey(null);
                     setSearchQuery("");
                     setResults([]);
+                    setActiveSearch(null);
+                    setHasMore(false);
+                    setNextPageToken(null);
                     setTab("search");
                   }}
                 />

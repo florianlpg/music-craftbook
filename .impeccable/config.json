@@ -1,0 +1,14 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "overused-font",
+        "value": "arial",
+        "createdAt": "2026-11-26T21:13:02.027Z",
+        "reason": "Agent review: Arial is the established global body font from the initial commit and is appropriate for the existing utility interface. The musical-key filter follows that typography."
+      }
+    ]
+  }
+}
