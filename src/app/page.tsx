@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Suspense } from "react";
 import Link from "next/link";
+import { SongExportDialog } from "@/app/components/song-export-dialog";
 import { MUSICAL_KEYS, normalizeMusicalKey, type MusicalKey } from "@/app/lib/musical-key";
 
 type Format = "mp3" | "mp4" | "wav";
@@ -696,6 +697,7 @@ function DownloaderForm() {
   const [tab, setTab] = useState<Tab>(
     searchParams.get("tab") === "search" ? "search"
     : searchParams.get("tab") === "favorites" ? "favorites"
+    : searchParams.get("tab") === "songs" ? "songs"
     : "download"
   );
   const [url, setUrl] = useState("");
@@ -736,6 +738,7 @@ function DownloaderForm() {
   // Songs
   const [songs, setSongs] = useState<SongItem[]>([]);
   const [songsLoading, setSongsLoading] = useState(false);
+  const [exportSong, setExportSong] = useState<SongItem | null>(null);
   const [songCreation, setSongCreation] = useState<SongCreation | null>(null);
 
   // Banned
@@ -1623,6 +1626,18 @@ function DownloaderForm() {
                         Open notes
                       </button>
 
+                      <button
+                        type="button"
+                        onClick={() => setExportSong(song)}
+                        aria-haspopup="dialog"
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
+                      >
+                        <svg aria-hidden="true" viewBox="0 0 24 24" className="size-3.5" fill="none" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 15V3m-4 4 4-4 4 4M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6" />
+                        </svg>
+                        Export
+                      </button>
+
                       {song.isPublic && song.publicId && (
                         <button
                           onClick={() => navigator.clipboard.writeText(`${window.location.origin}/view/${song.publicId}`)}
@@ -1802,6 +1817,15 @@ function DownloaderForm() {
             </div>
           );
         })()}
+
+        {exportSong && (
+          <SongExportDialog
+            key={exportSong.videoId}
+            videoId={exportSong.videoId}
+            songName={exportSong.songName}
+            onClose={() => setExportSong(null)}
+          />
+        )}
 
         {tab === "banned" && (
           <div className="space-y-3">
